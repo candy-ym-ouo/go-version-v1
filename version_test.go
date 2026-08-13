@@ -626,6 +626,97 @@ func TestVersionString(t *testing.T) {
 	}
 }
 
+// TestVersionZeroValueString asserts that a zero-value Version formats as the
+// canonical zero version "0.0.0", matching the string of NewVersion("0.0.0").
+// This keeps the observable string representation consistent with the equality
+// semantics in Compare, where a zero-value Version compares equal to "0.0.0".
+func TestVersionZeroValueString(t *testing.T) {
+	parse := func(v string) *Version {
+		ver, err := NewVersion(v)
+		if err != nil {
+			t.Fatalf("err parsing %q: %s", v, err)
+		}
+		return ver
+	}
+
+	cases := []struct {
+		name     string
+		version  *Version
+		expected string
+		original string
+	}{
+		{"zero value", &Version{}, "0.0.0", ""},
+		{"explicit 0.0.0", parse("0.0.0"), "0.0.0", "0.0.0"},
+		{"explicit 0", parse("0"), "0.0.0", "0"},
+		{"explicit 0.0", parse("0.0"), "0.0.0", "0.0"},
+		{"padded v0.0.0", parse("v0.0.0"), "0.0.0", "v0.0.0"},
+		{"regular 1.2.3", parse("1.2.3"), "1.2.3", "1.2.3"},
+		{"prerelease", parse("1.2.0-beta"), "1.2.0-beta", "1.2.0-beta"},
+		{"metadata", parse("1.2.0+build.5"), "1.2.0+build.5", "1.2.0+build.5"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.version.String(); got != tc.expected {
+				t.Fatalf("String(): expected %q, got %q", tc.expected, got)
+			}
+			if got := tc.version.Original(); got != tc.original {
+				t.Fatalf("Original(): expected %q, got %q", tc.original, got)
+			}
+		})
+	}
+}
+
+// TestVersionZeroValueCompareAndString asserts that versions which Compare as
+// equal also share an identical string representation, including the zero value
+// against an explicit "0.0.0" and other zero-equivalent forms.
+func TestVersionZeroValueCompareAndString(t *testing.T) {
+	zero := &Version{}
+	zeroForms := []string{"0.0.0", "0", "0.0", "v0.0.0"}
+
+	for _, form := range zeroForms {
+		parsed, err := NewVersion(form)
+		if err != nil {
+			t.Fatalf("err parsing %q: %s", form, err)
+		}
+
+		if cmp := zero.Compare(parsed); cmp != 0 {
+			t.Fatalf("zero.Compare(%q): expected 0, got %d", form, cmp)
+		}
+		if !zero.Equal(parsed) {
+			t.Fatalf("zero.Equal(%q): expected true", form)
+		}
+		// Equal versions must share a canonical string representation.
+		if zero.String() != parsed.String() {
+			t.Fatalf("string mismatch for equal versions %q: zero=%q parsed=%q",
+				form, zero.String(), parsed.String())
+		}
+	}
+
+	// Two independent zero values must be equal and stringify identically.
+	other := &Version{}
+	if zero.Compare(other) != 0 {
+		t.Fatalf("two zero values should compare equal")
+	}
+	if zero.String() != other.String() {
+		t.Fatalf("two zero values should stringify identically: %q vs %q",
+			zero.String(), other.String())
+	}
+
+	// A zero value must remain strictly less than a non-zero version, and the
+	// non-zero version's string must differ.
+	nonZero, err := NewVersion("1.0.0")
+	if err != nil {
+		t.Fatalf("err parsing 1.0.0: %s", err)
+	}
+	if zero.Compare(nonZero) != -1 {
+		t.Fatalf("zero.Compare(1.0.0): expected -1, got %d", zero.Compare(nonZero))
+	}
+	if zero.String() == nonZero.String() {
+		t.Fatalf("zero and 1.0.0 should not share a string representation")
+	}
+}
+
 func TestEqual(t *testing.T) {
 	cases := []struct {
 		v1       string

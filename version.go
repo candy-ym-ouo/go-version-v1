@@ -438,6 +438,14 @@ func (v *Version) String() string {
 }
 
 func (v *Version) bytes() []byte {
+	// A zero-value Version has no segments. Treat it as the canonical
+	// zero version "0.0.0" so that its string representation is consistent
+	// with the equality semantics in Compare, where a zero-value Version
+	// is equal to NewVersion("0.0.0").
+	if len(v.segments) == 0 {
+		return []byte("0.0.0")
+	}
+
 	var buf []byte
 	for i, s := range v.segments {
 		if i > 0 {
